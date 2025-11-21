@@ -1,0 +1,6 @@
+* text=auto
+*.js text
+*.json text
+*.html text
+*.css text
+*.conf text
