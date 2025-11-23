@@ -7,15 +7,19 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Node modules & build output
+node_modules/
+dist/
+dist-ssr/
+
+# Local environment files
 *.local
+.env
 
 # Editor directories and files
-.vscode/*
+.vscode/
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
@@ -23,5 +27,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment files
-.env
+# Docker
+*.pid
+*.sock
+docker-compose.override.yml
