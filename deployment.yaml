@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: msa-app-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: msa-app
+  template:
+    metadata:
+      labels:
+        app: msa-app
+    spec:
+      containers:
+      - name: msa-app
+        image: monsieurphale/movie-series-anime-recommendation-app:latest
+        ports:
+        - containerPort: 80
+        env:
+        - name: VITE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: msa-app-secrets
+              key: VITE_API_KEY
