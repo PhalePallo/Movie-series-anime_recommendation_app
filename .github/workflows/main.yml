@@ -9,6 +9,7 @@ jobs:
   build-and-push:
     name: Build, Push & Deploy
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,8 +41,16 @@ jobs:
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
         run: |
+          # create kube dir (mkdir -p works on ubuntu runners)
+          mkdir -p $HOME/.kube
+
+          # decode kubeconfig into file and secure it
           echo "$KUBE_CONFIG_DATA" | base64 --decode > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
+
+          # quick verification: print first 10 lines (safe)
+          echo "---- kubeconfig head ----"
+          head -n 10 $HOME/.kube/config || true
 
       - name: Deploy to Kubernetes
         run: |
