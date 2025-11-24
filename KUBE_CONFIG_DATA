@@ -1,3 +1,14 @@
-# locally
-cat ~/.kube/config | base64 -w0
-# copy the string and add it as KUBE_CONFIG_DATA secret in GitHub
+- name: Configure kubeconfig
+  env:
+    KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+  run: |
+    # create kube directory (mkdir -p works on ubuntu runners)
+    mkdir -p $HOME/.kube
+
+    # decode kubeconfig into file and secure it
+    echo "$KUBE_CONFIG_DATA" | base64 --decode > $HOME/.kube/config
+    chmod 600 $HOME/.kube/config
+
+    # quick verification (non-sensitive): print kubeconfig file head (first 10 lines)
+    echo "---- kubeconfig head ----"
+    head -n 10 $HOME/.kube/config | sed -n '1,10p'
