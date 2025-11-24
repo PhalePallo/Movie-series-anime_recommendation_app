@@ -1,3 +1,0 @@
-# locally
-cat ~/.kube/config | base64 -w0
-# copy the string and add it as KUBE_CONFIG_DATA secret in GitHub
