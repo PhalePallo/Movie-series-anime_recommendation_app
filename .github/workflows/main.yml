@@ -1,88 +1,40 @@
-name: Build & Deploy - MSA App (kind, load into local Docker)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: msa-app-deployment
+  labels:
+    app: msa-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: msa-app
+  template:
+    metadata:
+      labels:
+        app: msa-app
+    spec:
+      containers:
+        - name: msa-app
+          image: msa-app:latest            # local image loaded into kind in CI
+          imagePullPolicy: Never           # important for kind (use local image)
+          ports:
+            - containerPort: 80
 
-on:
-  push:
-    branches:
-      - main
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU (optional)
-        uses: docker/setup-qemu-action@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Build Docker image (no push, load into local Docker)
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: false
-          load: true                # <- load built image into local Docker
-          tags: msa-app:latest
-          build-args: |
-            VITE_GEMINI_API_KEY=${{ secrets.BUILD_VITE_GEMINI_API_KEY }}
-
-      - name: Show local docker images (debug)
-        run: |
-          echo "Local images:"
-          docker images | grep msa-app || true
-
-      - name: Install kind
-        run: |
-          KIND_VERSION="v0.20.0"
-          echo "Installing kind $KIND_VERSION"
-          curl -Lo ./kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-          kind --version
-
-      - name: Create kind cluster
-        run: |
-          kind create cluster --wait 120s --name msa-ci
-
-      - name: Load image into kind
-        run: |
-          kind load docker-image msa-app:latest --name msa-ci
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'v1.30.0'
-
-      - name: Deploy to kind
-        run: |
-          kubectl apply -f deployment.yaml
-          kubectl apply -f service.yaml
-          kubectl rollout status deployment/msa-app-deployment --timeout=120s
-
-      - name: Wait & show resources
-        run: |
-          kubectl get nodes -o wide
-          kubectl get pods -o wide
-          kubectl get svc -o wide
-
-      - name: Test service via in-cluster curl pod
-        run: |
-          # adjust svc name/port if your service differs
-          SVC_URL="http://msa-app-service.default.svc.cluster.local:80"
-          echo "Testing service at $SVC_URL"
-          kubectl run --rm -i --restart=Never curltest --image=curlimages/curl -- /bin/sh -c "sleep 2; echo 'GET /' ; curl -s -w '\nHTTP_STATUS:%{http_code}\n' $SVC_URL || exit 1"
-
-      - name: Show latest msa-app pod logs
-        run: |
-          POD=$(kubectl get pods -l app=msa-app -o jsonpath='{.items[0].metadata.name}')
-          echo "Pod: $POD"
-          kubectl logs $POD || true
-
-      - name: Delete kind cluster (cleanup)
-        if: always()
-        run: |
-          kind delete cluster --name msa-ci || true
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
