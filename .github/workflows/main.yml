@@ -9,18 +9,19 @@ jobs:
   build-and-deploy:
     name: Build, Load & Deploy on kind
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up QEMU (for multi‑arch, optional)
+      - name: Set up QEMU (optional for multi-arch)
         uses: docker/setup-qemu-action@v2
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Build Docker image
+      - name: Build Docker image (no push)
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -30,25 +31,41 @@ jobs:
             VITE_GEMINI_API_KEY=${{ secrets.BUILD_VITE_GEMINI_API_KEY }}
 
       - name: Set up kind cluster
-        uses: kind-actions/setup-kind@v1 # updated action
+        uses: kind-actions/setup-kind@v1
         with:
           version: v0.20.0
 
-      - name: Load Docker image into kind
-        run: kind load docker-image msa-app:latest
+      - name: Load image into kind
+        run: |
+          kind load docker-image msa-app:latest
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
         with:
           version: 'v1.30.0'
 
-      - name: Deploy to Kubernetes (kind)
+      - name: Deploy to kind
         run: |
           kubectl apply -f deployment.yaml
           kubectl apply -f service.yaml
           kubectl rollout status deployment/msa-app-deployment --timeout=120s
 
-      - name: List pods & services
+      - name: Wait for service & show objects
         run: |
-          kubectl get pods --all-namespaces
-          kubectl get svc --all-namespaces
+          kubectl get pods -o wide
+          kubectl get svc -o wide
+
+      - name: Test service via in-cluster curl pod
+        run: |
+          # extract service name & port (assumes service name is msa-app-service and port 80)
+          SVC_URL="http://msa-app-service.default.svc.cluster.local:80"
+          echo "Testing service at $SVC_URL"
+          # run ephemeral curl pod (curlimages/curl) to call the service from inside the cluster
+          kubectl run --rm -i --restart=Never curltest --image=curlimages/curl -- /bin/sh -c "sleep 2; echo 'GET /' ; curl -s -w '\nHTTP_STATUS:%{http_code}\n' $SVC_URL || exit 1"
+
+      - name: Show pod logs (optional)
+        run: |
+          # shows logs for the latest msa-app pod
+          POD=$(kubectl get pods -l app=msa-app -o jsonpath='{.items[0].metadata.name}')
+          echo "Showing logs for $POD"
+          kubectl logs $POD || true
