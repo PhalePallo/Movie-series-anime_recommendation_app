@@ -1,4 +1,4 @@
-name: Build & Deploy - MSA App (kind, manual install)
+name: Build & Deploy - MSA App (kind, load into local Docker)
 
 on:
   push:
@@ -20,16 +20,21 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Build Docker image (no push)
+      - name: Build Docker image (no push, load into local Docker)
         uses: docker/build-push-action@v4
         with:
           context: .
           push: false
+          load: true                # <- load built image into local Docker
           tags: msa-app:latest
           build-args: |
             VITE_GEMINI_API_KEY=${{ secrets.BUILD_VITE_GEMINI_API_KEY }}
 
-      # ---- Install kind manually (robust)
+      - name: Show local docker images (debug)
+        run: |
+          echo "Local images:"
+          docker images | grep msa-app || true
+
       - name: Install kind
         run: |
           KIND_VERSION="v0.20.0"
@@ -41,7 +46,6 @@ jobs:
 
       - name: Create kind cluster
         run: |
-          # create a simple cluster; adjust node image if you need a specific k8s version
           kind create cluster --wait 120s --name msa-ci
 
       - name: Load image into kind
@@ -59,7 +63,7 @@ jobs:
           kubectl apply -f service.yaml
           kubectl rollout status deployment/msa-app-deployment --timeout=120s
 
-      - name: Wait & list resources
+      - name: Wait & show resources
         run: |
           kubectl get nodes -o wide
           kubectl get pods -o wide
@@ -67,9 +71,10 @@ jobs:
 
       - name: Test service via in-cluster curl pod
         run: |
+          # adjust svc name/port if your service differs
           SVC_URL="http://msa-app-service.default.svc.cluster.local:80"
           echo "Testing service at $SVC_URL"
-          kubectl run --rm -i --restart=Never curltest --image=curlimages/curl -- /bin/sh -c "sleep 2; curl -s -w '\nHTTP_STATUS:%{http_code}\n' $SVC_URL || exit 1"
+          kubectl run --rm -i --restart=Never curltest --image=curlimages/curl -- /bin/sh -c "sleep 2; echo 'GET /' ; curl -s -w '\nHTTP_STATUS:%{http_code}\n' $SVC_URL || exit 1"
 
       - name: Show latest msa-app pod logs
         run: |
@@ -77,7 +82,7 @@ jobs:
           echo "Pod: $POD"
           kubectl logs $POD || true
 
-      - name: Delete kind cluster (optional cleanup)
+      - name: Delete kind cluster (cleanup)
         if: always()
         run: |
           kind delete cluster --name msa-ci || true
