@@ -31,9 +31,10 @@ jobs:
             VITE_GEMINI_API_KEY=${{ secrets.BUILD_VITE_GEMINI_API_KEY }}
 
       - name: Set up kind cluster
-        uses: kind-actions/setup-kind@v1
+        uses: engineerd/setup-kind@v0.6.0
         with:
-          version: v0.20.0
+          version: v0.20.0   # kind binary version; change if you want a different kind release
+          wait: 300s
 
       - name: Load image into kind
         run: |
@@ -57,15 +58,12 @@ jobs:
 
       - name: Test service via in-cluster curl pod
         run: |
-          # extract service name & port (assumes service name is msa-app-service and port 80)
           SVC_URL="http://msa-app-service.default.svc.cluster.local:80"
           echo "Testing service at $SVC_URL"
-          # run ephemeral curl pod (curlimages/curl) to call the service from inside the cluster
           kubectl run --rm -i --restart=Never curltest --image=curlimages/curl -- /bin/sh -c "sleep 2; echo 'GET /' ; curl -s -w '\nHTTP_STATUS:%{http_code}\n' $SVC_URL || exit 1"
 
       - name: Show pod logs (optional)
         run: |
-          # shows logs for the latest msa-app pod
           POD=$(kubectl get pods -l app=msa-app -o jsonpath='{.items[0].metadata.name}')
           echo "Showing logs for $POD"
           kubectl logs $POD || true
